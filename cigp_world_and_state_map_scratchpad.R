@@ -718,7 +718,7 @@ states_map
 # grid.draw(states_map_grob)
 
 # save map as pdf (note that cairo_pdf is needed to render non-standard fonts, and it can't save as png, so pdf is only option)
-ggsave(filename = "output/states_map.pdf", plot = states_map, units = "in", dpi = 300, device = cairo_pdf)
+ggsave(filename = "scratchpad/states_map.pdf", plot = states_map, units = "in", dpi = 300, device = cairo_pdf)
 
 
 #########
@@ -727,7 +727,7 @@ ggsave(filename = "output/states_map.pdf", plot = states_map, units = "in", dpi 
 # read pdf as image with magick and pdftools, then crop out white space, then save as a png
 
 # read pdf
-states_map_pdf <- pdf_render_page(pdf = "output/states_map.pdf", page = 1, dpi = 300)
+states_map_pdf <- pdf_render_page(pdf = "scratchpad/states_map.pdf", page = 1, dpi = 300)
 
 # convert to magick image
 cigp_state_map_image <- image_read(states_map_pdf)
@@ -744,12 +744,12 @@ cigp_state_map_image <- image_crop(image = cigp_state_map_image, geometry = geom
 
 # save world_map_source_plot as pdf
 state_map_source_plot <- starwars %>% ggplot(data = ., aes(x = mass)) + geom_histogram() + 
-        ggtitle("Source: CAGP data.") +
+        ggtitle("Source: Fake data.") +
         theme(plot.title = element_text(size = 12, hjust = 0, family = "Trebuchet MS", color = "#808080"))
-ggsave(filename = "output/state_map_source_plot.pdf", plot = state_map_source_plot, units = "in", dpi = 300, device = cairo_pdf)
+ggsave(filename = "scratchpad/state_map_source_plot.pdf", plot = state_map_source_plot, units = "in", dpi = 300, device = cairo_pdf)
 
 # load state_map_source_plot as image
-state_map_source_pdf <- pdf_render_page(pdf = "output/state_map_source_plot.pdf", page = 1, dpi = 300)
+state_map_source_pdf <- pdf_render_page(pdf = "scratchpad/state_map_source_plot.pdf", page = 1, dpi = 300)
 
 # convert pdf to image
 state_map_source_image <- image_read(state_map_source_pdf)
@@ -762,7 +762,7 @@ state_map_source_image
 # overlay source_footnote_image
 image_info(cigp_state_map_image)
 cigp_state_map_image <- image_composite(image = cigp_state_map_image, composite_image = image_resize(image = state_map_source_image, 
-                                                                                                     geometry = geometry_size_pixels(width = 165, height = 200)), offset = geometry_point(x = 0, y = 850))
+                                                geometry = geometry_size_pixels(width = 165, height = 200)), offset = geometry_point(x = 0, y = 850))
 
 
 ################
@@ -770,15 +770,15 @@ cigp_state_map_image <- image_composite(image = cigp_state_map_image, composite_
 
 # add 0 tick mark to legend
 
-# load map as image and add zero to legend
-zero_image <- image_read("output/zero_image.png")
+# load map as image and add zero to legend (zero image is saved in creation of world map above)
+zero_image <- image_read("scratchpad/zero_image.png")
 image_info(cigp_state_map_image)
 cigp_state_map_image <- image_composite(image = cigp_state_map_image, composite_image = image_resize(image = zero_image, 
-                                                                                                     geometry = geometry_size_pixels(width = 17, height = 17)), offset = geometry_point(x = 1339, y = 740))
+                                                geometry = geometry_size_pixels(width = 17, height = 17)), offset = geometry_point(x = 1441, y = 740))
 cigp_state_map_image
 
 # save states_map_image
-image_write(image = cigp_state_map_image, path = "output/cigp_state_map.png", format = "png", density = "300x300")
+image_write(image = cigp_state_map_image, path = "scratchpad/cigp_state_map.png", format = "png", density = "300x300")
 
 
 
