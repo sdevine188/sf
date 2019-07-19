@@ -214,9 +214,9 @@ cigp_world_map <- world_ne_sovereign %>% filter(NAME != "Antarctica") %>%
               panel.grid.minor = element_blank(), panel.border = element_blank(),
               axis.ticks.y = element_blank(), axis.text.y = element_blank(), axis.title.y = element_blank(),
               axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.title.x = element_blank(),
-              plot.title = element_text(size = 6, face = "bold", hjust = 0, family = "Trebuchet MS"), legend.position = "right",
-              legend.key.size = unit(2, "mm"), legend.title = element_text(size = 4, family = "Trebuchet MS"),
-              legend.text = element_text(size = 4, family = "Trebuchet MS"), 
+              plot.title = element_text(size = 6, face = "bold", hjust = 0, family = "Source Sans Pro"), legend.position = "right",
+              legend.key.size = unit(2, "mm"), legend.title = element_text(size = 4, family = "Source Sans Pro"),
+              legend.text = element_text(size = 4, family = "Source Sans Pro"), 
               panel.grid = element_blank(),
               line = element_blank(),
               rect = element_blank(),
@@ -265,7 +265,7 @@ starwars_color_list
 # create plot with manual legend
 starwars_plot <- starwars2 %>% ggplot(data = ., aes(x = mass, fill = fill_color_bin)) + geom_bar() +
         scale_fill_manual(values = starwars_color_list, labels = c(0, 100, 1000)) +
-        theme(legend.text = element_text(size = 12, family = "Trebuchet MS"))
+        theme(legend.text = element_text(size = 12, family = "Source Sans Pro"))
 starwars_plot
 
 # save plot as png
@@ -287,7 +287,7 @@ image_write(image = zero_image, path = "scratchpad/zero_image.png", format = 'pn
 # load map as image and add zero to legend
 image_info(cigp_world_map_image)
 cigp_world_map_image <- image_composite(image = cigp_world_map_image, composite_image = image_resize(image = zero_image, 
-                        geometry = geometry_size_pixels(width = 17, height = 17)), offset = geometry_point(x = 1242, y = 675))
+                                                                                                     geometry = geometry_size_pixels(width = 17, height = 17)), offset = geometry_point(x = 1242, y = 675))
 cigp_world_map_image
 
 # save states_map_image
@@ -386,9 +386,9 @@ country_bar_chart <- country_counts %>%
                 panel.grid = element_blank(),
                 line = element_blank(),
                 rect = element_blank(),
-                axis.title.y = element_text(family = "Trebuchet MS", size = 9, color = "black"),
+                axis.title.y = element_text(family = "Source Sans Pro", size = 9, color = "black"),
                 axis.text.y = element_blank(),
-                axis.text.x = element_text(angle = -45, hjust = 0, family = "Trebuchet MS", size = 9, color = "black"), 
+                axis.text.x = element_text(angle = -45, hjust = 0, family = "Source Sans Pro", size = 9, color = "black"), 
                 axis.title.x = element_blank(),
                 plot.margin = margin(0, 10, 20, 0),
                 plot.title = element_blank(),
@@ -413,7 +413,7 @@ image_info(country_bar_chart_image)
 # save country_bar_chart_source_plot as pdf
 country_bar_chart_source_plot <- starwars %>% ggplot(data = ., aes(x = mass)) + geom_histogram() +
         ggtitle("Source: Fake data.") +
-        theme(plot.title = element_text(size = 12, hjust = 0, family = "Trebuchet MS", color = "#808080"))
+        theme(plot.title = element_text(size = 12, hjust = 0, family = "Source Sans Pro", color = "#808080"))
 ggsave(filename = "scratchpad/country_bar_chart_source_plot.pdf", plot = country_bar_chart_source_plot, units = "in", dpi = 300, device = cairo_pdf)
 
 # load country_bar_chart_source_plot as image
@@ -430,7 +430,7 @@ country_bar_chart_source_image
 # overlay source_footnote_image
 image_info(country_bar_chart_image)
 country_bar_chart_image <- image_composite(image = country_bar_chart_image, composite_image = image_resize(image = country_bar_chart_source_image,
-                                                geometry = geometry_size_pixels(width = 950, height = 300)), offset = geometry_point(x = 0, y = 1250))
+                                                                                                           geometry = geometry_size_pixels(width = 950, height = 300)), offset = geometry_point(x = 0, y = 1250))
 country_bar_chart_image
 
 # save as png
@@ -628,11 +628,13 @@ text_color_list
 
 # create geom_segment_tbl for line segment pointing out geom_text for east coast states
 # note will get warning about st_centroid assumptions - no problem
-geom_segment_list <- states_sf_transformed %>% filter(NAME %in% c("New Jersey", "District of Columbia", "Maryland", "Rhode Island", "Connecticut")) %>% 
+geom_segment_list <- states_sf_transformed %>% 
+        filter(NAME %in% c("New Jersey", "District of Columbia", "Maryland", "Rhode Island", "Connecticut", "Delaware", "Massachusetts")) %>% 
         st_transform(102003) %>% st_centroid(geometry) %>% pull(geometry) %>% unlist()
 geom_segment_list
 
-geom_segment_tbl_id <- states_sf_transformed %>% filter(NAME %in% c("New Jersey", "District of Columbia", "Maryland", "Rhode Island", "Connecticut")) %>% 
+geom_segment_tbl_id <- states_sf_transformed %>% 
+        filter(NAME %in% c("New Jersey", "District of Columbia", "Maryland", "Rhode Island", "Connecticut", "Delaware", "Massachusetts")) %>% 
         st_transform(102003) %>% st_centroid(geometry) %>% mutate(NAME = as.character(NAME)) %>% pull(NAME)
 geom_segment_tbl_id
 
@@ -651,6 +653,9 @@ states_map <- states_sf_transformed %>%
                                       NAME == "New Jersey" ~ "c8_2000_to_5000",
                                       NAME == "Rhode Island" ~ "c8_2000_to_5000",
                                       NAME == "Connecticut" ~ "c8_2000_to_5000",
+                                      NAME == "Delaware" ~ "c8_2000_to_5000",
+                                      NAME == "Hawaii" ~ "c8_2000_to_5000",
+                                      NAME == "Massachusetts" ~ "c8_2000_to_5000",
                                       TRUE ~ fill_color_bin)) %>%
         st_transform(102003) %>%
         mutate(centroid = st_centroid(geometry)) %>%
@@ -660,7 +665,7 @@ states_map <- states_sf_transformed %>%
         coord_sf(crs = st_crs(102003)) +
         scale_fill_manual(values = state_fill_color_list, name = "Number\nof\nCAGP\nparticipants\n",
                           labels = c(1, 200, 400, 600, 800, comma(1000), comma(2000), comma(5000))) +
-        geom_text(aes(label = n_for_plotting, x = lon, y = lat, color = text_color), check_overlap = TRUE, family = "Trebuchet MS", size = 1.5,
+        geom_text(aes(label = n_for_plotting, x = lon, y = lat, color = text_color), check_overlap = TRUE, family = "Source Sans Pro", size = 1.5,
                   nudge_x = case_when(states_sf_transformed$NAME == "New Jersey" ~ 490000,
                                       states_sf_transformed$NAME == "Rhode Island" ~ 490000,
                                       states_sf_transformed$NAME == "District of Columbia" ~ 480000,
@@ -671,24 +676,38 @@ states_map <- states_sf_transformed %>%
                                       states_sf_transformed$NAME == "Michigan" ~ 80000,
                                       states_sf_transformed$NAME == "New York" ~ 30000,
                                       states_sf_transformed$NAME == "California" ~ -30000,
+                                      states_sf_transformed$NAME == "Delaware" ~ 380000,
+                                      states_sf_transformed$NAME == "Massachusetts" ~ 520000,
+                                      states_sf_transformed$NAME == "Hawaii" ~ -40000,
                                       TRUE ~ 0),
                   nudge_y = case_when(states_sf_transformed$NAME == "District of Columbia" ~ -210000,
                                       states_sf_transformed$NAME == "Rhode Island" ~ 170000, 
                                       states_sf_transformed$NAME == "Maryland" ~ 30000,
                                       states_sf_transformed$NAME == "Michigan" ~ -150000,
                                       states_sf_transformed$NAME == "Florida" ~ -120000,
+                                      states_sf_transformed$NAME == "Delaware" ~ -120000,
+                                      states_sf_transformed$NAME == "Massachusetts" ~ 260000,
+                                      states_sf_transformed$NAME == "Idaho" ~ -50000,
+                                      states_sf_transformed$NAME == "Hawaii" ~ -50000,
+                                      states_sf_transformed$NAME == "Alaska" ~ 50000,
                                       TRUE ~ 0)) +
         scale_color_manual(values = text_color_list, guide = FALSE) +
         geom_segment(data = geom_segment_tbl, size = .1, 
                      x = case_when(geom_segment_tbl$NAME == "Maryland" ~ geom_segment_tbl$centroid_x - 50000,
                                    geom_segment_tbl$NAME == "New Jersey" ~ geom_segment_tbl$centroid_x + 20000,
+                                   geom_segment_tbl$NAME == "Delaware" ~ geom_segment_tbl$centroid_x + 20000,
                                    TRUE ~ geom_segment_tbl$centroid_x),
                      y = case_when(geom_segment_tbl$NAME == "Maryland" ~ geom_segment_tbl$centroid_y + 30000,
+                                   geom_segment_tbl$NAME == "Delaware" ~ geom_segment_tbl$centroid_y - 20000,
+                                   geom_segment_tbl$NAME == "Massachusetts" ~ geom_segment_tbl$centroid_y + 10000,
                                    TRUE ~ geom_segment_tbl$centroid_y),
-                     xend = geom_segment_tbl$centroid_x + 400000,
+                     xend = case_when(geom_segment_tbl$NAME == "Delaware" ~ geom_segment_tbl$centroid_x + 300000,
+                                      TRUE ~ geom_segment_tbl$centroid_x + 400000),
                      yend = case_when(geom_segment_tbl$NAME == "District of Columbia" ~ geom_segment_tbl$centroid_y - 200000,
                                       geom_segment_tbl$NAME == "Rhode Island" ~ geom_segment_tbl$centroid_y + 170000,
                                       geom_segment_tbl$NAME == "Maryland" ~ geom_segment_tbl$centroid_y + 30000,
+                                      geom_segment_tbl$NAME == "Delaware" ~ geom_segment_tbl$centroid_y - 130000,
+                                      geom_segment_tbl$NAME == "Massachusetts" ~ geom_segment_tbl$centroid_y + 260000,
                                       TRUE ~ geom_segment_tbl$centroid_y)) +
         theme_bw() +
         theme(panel.grid.major = element_line(color = "transparent"),
@@ -696,14 +715,14 @@ states_map <- states_sf_transformed %>%
               panel.grid.minor = element_blank(), panel.border = element_blank(),
               axis.ticks.y = element_blank(), axis.text.y = element_blank(), axis.title.y = element_blank(),
               axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.title.x = element_blank(),
-              plot.title = element_text(size = 6, face = "bold", hjust = 0, family = "Trebuchet MS"), legend.position = "right",
-              legend.key.size = unit(2, "mm"), legend.title = element_text(size = 4, family = "Trebuchet MS"),
-              legend.text = element_text(size = 4, family = "Trebuchet MS"),
+              plot.title = element_text(size = 6, face = "bold", hjust = 0, family = "Source Sans Pro"), legend.position = "right",
+              legend.key.size = unit(2, "mm"), legend.title = element_text(size = 4, family = "Source Sans Pro"),
+              legend.text = element_text(size = 4, family = "Source Sans Pro"),
               panel.grid = element_blank(),
               line = element_blank(),
               rect = element_blank(),
               text = element_blank()) + 
-        guides(fill = guide_legend(title.hjust = .5, reverse = TRUE, keyheight = 1, label.vjust = 1.2)) 
+        guides(fill = guide_legend(title.hjust = .5, reverse = TRUE, keyheight = 1, label.vjust = 1.13)) 
 
 states_map
 
@@ -745,7 +764,7 @@ cigp_state_map_image <- image_crop(image = cigp_state_map_image, geometry = geom
 # save world_map_source_plot as pdf
 state_map_source_plot <- starwars %>% ggplot(data = ., aes(x = mass)) + geom_histogram() + 
         ggtitle("Source: Fake data.") +
-        theme(plot.title = element_text(size = 12, hjust = 0, family = "Trebuchet MS", color = "#808080"))
+        theme(plot.title = element_text(size = 12, hjust = 0, family = "Source Sans Pro", color = "#808080"))
 ggsave(filename = "scratchpad/state_map_source_plot.pdf", plot = state_map_source_plot, units = "in", dpi = 300, device = cairo_pdf)
 
 # load state_map_source_plot as image
@@ -762,7 +781,7 @@ state_map_source_image
 # overlay source_footnote_image
 image_info(cigp_state_map_image)
 cigp_state_map_image <- image_composite(image = cigp_state_map_image, composite_image = image_resize(image = state_map_source_image, 
-                                                geometry = geometry_size_pixels(width = 165, height = 200)), offset = geometry_point(x = 0, y = 850))
+                                                                                                     geometry = geometry_size_pixels(width = 165, height = 200)), offset = geometry_point(x = 0, y = 850))
 
 
 ################
@@ -774,11 +793,8 @@ cigp_state_map_image <- image_composite(image = cigp_state_map_image, composite_
 zero_image <- image_read("scratchpad/zero_image.png")
 image_info(cigp_state_map_image)
 cigp_state_map_image <- image_composite(image = cigp_state_map_image, composite_image = image_resize(image = zero_image, 
-                                                geometry = geometry_size_pixels(width = 17, height = 17)), offset = geometry_point(x = 1441, y = 740))
+                                                                                                     geometry = geometry_size_pixels(width = 17, height = 17)), offset = geometry_point(x = 1441, y = 740))
 cigp_state_map_image
 
 # save states_map_image
 image_write(image = cigp_state_map_image, path = "scratchpad/cigp_state_map.png", format = "png", density = "300x300")
-
-
-
