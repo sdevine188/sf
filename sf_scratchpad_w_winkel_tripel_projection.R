@@ -13,6 +13,8 @@ library(officer)
 library(devEMF)
 # library(ggsn)
 library(ggspatial) # ggspatial has the best map scale and north arrow
+library(ggmap)
+library(viridis)
 
 # https://wilkelab.org/practicalgg/articles/Winkel_tripel.html
 # note that getMap uses natural earth for country boundaries, but fixes several issues, so better to pull from rworldmap
@@ -26,15 +28,21 @@ library(ggspatial) # ggspatial has the best map scale and north arrow
 
 # tutorial on ggsn for scale and north arrow: http://oswaldosantos.github.io/ggsn/
 
+# options for topographical maps
+# https://gis.stackexchange.com/questions/224035/how-to-create-a-crisp-topographical-terrain-map-with-ggplot2
+
+# ggmap: https://www.littlemissdata.com/blog/maps
+# https://cengel.github.io/R-spatial/mapping.html#adding-basemaps-with-ggmap
 
 # setwd
 setwd("C:/Users/Stephen/Desktop/R/sf")
 
-# get world map as sf object
+# get world map as sf object ####
 world_sf <- st_as_sf(getMap(resolution = "low"))
 world_sf
 world_sf %>% glimpse()
 world_sf %>% class()
+st_crs(world_sf)
 
 # note when I pull SOVEREIGNT out as a character in a tibble, it's only 202 countries; 
 # there is 244 rows though, and 244 distinct SOVEREIGNT - but some are duplicates, 
@@ -60,7 +68,7 @@ world_sf %>% distinct(SOVEREIGNT) %>% pull(SOVEREIGNT) %>%
 #/////////////////////////////////////////////////////////////////////////////////////
 
 
-# join world_sf with data of interest
+# join world_sf with data of interest ####
 
 # create fake_data
 fake_data <- world_sf %>% distinct(SOVEREIGNT) %>% pull(SOVEREIGNT) %>% 
@@ -77,13 +85,35 @@ world_sf <- world_sf %>% left_join(., fake_data, by = "SOVEREIGNT")
 world_sf %>% glimpse()
 
 
+#////////////////////
+
+
+# create fake_data_2
+fake_data_2 <- world_sf %>% distinct(SOVEREIGNT) %>% pull(SOVEREIGNT) %>% 
+        tibble(SOVEREIGNT = .) %>% mutate(SOVEREIGNT = as.character(SOVEREIGNT)) %>% distinct(SOVEREIGNT) 
+fake_data_2 <- fake_data_2 %>% mutate(n2 = sample(x = seq(from = 0, to = 10000, by = 1), size = nrow(fake_data))) %>%
+        mutate(n2 = case_when(row_number() %in% 1:20 ~ NA_real_, row_number() %in% 21:40 ~ 5, TRUE ~ n2),
+               SOVEREIGNT = factor(SOVEREIGNT))
+fake_data_2 %>% arrange(n2)
+fake_data_2 %>% arrange(desc(n2))
+fake_data_2 %>% ggplot(data = ., aes(x = n2)) + geom_histogram()
+
+# join data of interest with world_sf
+world_sf <- world_sf %>% left_join(., fake_data_2, by = "SOVEREIGNT")
+world_sf %>% glimpse()
+
+
 #/////////////////////////////////////////////////////////////////////////////////////
 
 
-# get color_palette
+# get color_palette ####
 display.brewer.pal(n = 9, name = "Blues")
 color_palette <- brewer.pal(n = 9, name = "Blues") %>% tibble(hex = .)
 color_palette
+
+color_palette <- viridis_pal()(5)
+color_palette <- tibble(hex = color_palette)
+show_col(color_palette %>% pull(hex))
 
 # add fill_color_bin and fill_color
 world_sf <- world_sf %>% 
@@ -94,11 +124,11 @@ world_sf <- world_sf %>%
                                           n >= 1500 & n < 5000 ~ "1500_to_5000",
                                           n >= 5000 ~ "5000_to_130000"),
                fill_color = case_when(fill_color_bin == "0_to_1" ~ "#ffffff",
-                                      fill_color_bin == "1_to_50" ~ color_palette %>% slice(3) %>% pull(hex),
-                                      fill_color_bin == "50_to_150" ~ color_palette %>% slice(5) %>% pull(hex),
-                                      fill_color_bin == "150_to_1500" ~ color_palette %>% slice(7) %>% pull(hex),
-                                      fill_color_bin == "1500_to_5000" ~ color_palette %>% slice(8) %>% pull(hex),
-                                      fill_color_bin == "5000_to_130000" ~ color_palette %>% slice(9) %>% pull(hex)))
+                                      fill_color_bin == "1_to_50" ~ color_palette %>% slice(5) %>% pull(hex),
+                                      fill_color_bin == "50_to_150" ~ color_palette %>% slice(4) %>% pull(hex),
+                                      fill_color_bin == "150_to_1500" ~ color_palette %>% slice(3) %>% pull(hex),
+                                      fill_color_bin == "1500_to_5000" ~ color_palette %>% slice(2) %>% pull(hex),
+                                      fill_color_bin == "5000_to_130000" ~ color_palette %>% slice(1) %>% pull(hex)))
 
 # inspect
 world_sf
@@ -129,7 +159,7 @@ fonts()
 
 #/////////////////////////////////////////////////////////////////////////////////////
 
-# plot
+# plot basic, w bounding box ####
 # note that basic plots like this can be overlaid with bounding box to show global location as inset for zoomed in local map
 # using annotate() you can add a rect geom; note that using geom_rect has issues since it inherits the default dataframe
 # passed to ggplot, so you either need to create a seperate dataframe, or other workarounds
@@ -169,7 +199,7 @@ world_sf %>%
 #////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-# plot using winkel tripel projection by first transforming projection
+# plot using winkel tripel projection by first transforming projection ####
 world_map <- world_sf %>% st_transform_proj(crs = "+proj=wintri +datum=WGS84 +no_defs +over") %>%
         filter(SOVEREIGNT != "Antarctica") %>%
         ggplot(aes(fill = factor(fill_color_bin, 
@@ -236,15 +266,19 @@ read_docx() %>%
 #////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-# plot with selected regions only
-region_map <- world_sf %>% st_transform_proj(crs = "+proj=wintri +datum=WGS84 +no_defs +over") %>% 
-        filter(REGION %in% c("Europe", "Asia")) %>%
+# plot with selected regions only ####
+# not using winkel tripel to match google maps (which looks normal for sub-global scale) 
+world_sf %>% filter(str_detect(string = SOVEREIGNT, pattern = regex("serb", ignore_case = TRUE))) %>% select(SOVEREIGNT)
+
+region_map <- world_sf %>%  
+        filter(SOVEREIGNT %in% c("Albania", "Bosnia and Herzegovina", "Kosovo", "Macedonia",
+                                 "Republic of Serbia", "Ukraine", "Belarus", "Moldova", "Armenia", "Azerbaijan",
+                                 "Georgia", "Bulgaria", "Romania", "Montenegro", "Croatia", "Hungary", "Slovakia", "Poland")) %>%
         ggplot(aes(fill = factor(fill_color_bin, 
                                  levels = c("0_to_1", "1_to_50", "50_to_150", "150_to_1500", "1500_to_5000", "5000_to_130000")))) + 
         geom_sf(color = "#a6a6a6", size = 0.05) +
         scale_fill_manual(values = world_fill_color_list, name = " \n ",
                           labels = c(1, 50, 150, comma(1500), comma(5000), comma(130000))) +
-        coord_sf(datum = NULL) +
         theme_bw() +
         theme(panel.grid.major = element_line(color = "transparent"),
               plot.background = element_blank(), 
@@ -291,11 +325,12 @@ read_docx() %>%
 #////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-# plot with selected countries only
+# plot with selected countries only, also north arrow and scale ####
+# note that with north arrow and scaling you can't use winkel tripel projection
 world_sf %>% filter(str_detect(string = SOVEREIGNT, pattern = regex("hungary", ignore_case = TRUE))) %>% pull(SOVEREIGNT)
 
 # plot 
-countries_map <- world_sf %>% st_transform_proj(crs = "+proj=wintri +datum=WGS84 +no_defs +over") %>% 
+countries_map <- world_sf %>%
         filter(SOVEREIGNT %in% c("Kosovo", "Croatia", "Bosnia and Herzegovina", "Montenegro", "Republic of Serbia", 
                                  "Albania", "Hungary")) %>%
         ggplot(aes(fill = factor(fill_color_bin, 
@@ -303,11 +338,6 @@ countries_map <- world_sf %>% st_transform_proj(crs = "+proj=wintri +datum=WGS84
         geom_sf(color = "#a6a6a6", size = 0.05) +
         scale_fill_manual(values = world_fill_color_list, name = " \n ",
                           labels = c(1, 50, 150, comma(1500), comma(5000), comma(130000))) +
-        coord_sf(datum = NULL) +
-        # note that compass looks ok in r studio, but when output to emf it gets corrupted; will use cowplot instead
-        # north(symbol = 16, x.min = 1950000, x.max = 1850000, y.min = 5100000, y.max = 5300000, scale = 1.5) +
-        # scalebar(data = world_sf, dist = 100, dist_unit = "km", transform = FALSE, model = "WGS84", 
-        #          anchor = c(x = 1950000, y = 4600000), height = 100, st.size = 5, st.dist = 200, st.bottom = TRUE) +
         annotation_scale(location = "bl", width_hint = 0.3, text_cex = 0.9) +
         annotation_north_arrow(location = "bl", which_north = "true", 
                                pad_x = unit(0.8, "in"), pad_y = unit(0.3, "in"),
@@ -365,9 +395,249 @@ read_docx() %>%
         print(target = "countries_map.docx")
 
 
+
+#///////////////////////////////////////////////////////////////////////////////////////////////////////
+#///////////////////////////////////////////////////////////////////////////////////////////////////////
+#///////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+# customized to e&e ####
+
+# get ee_sf trimmed to region
+# note the sf is using wgs84 coordinate reference system
+world_sf %>% filter(str_detect(string = SOVEREIGNT, pattern = regex("russia", ignore_case = TRUE))) %>% select(SOVEREIGNT)
+ee_presence_countries <- c("Kosovo", "Bosnia and Herzegovina", "Republic of Serbia", 
+                         "Albania", "Armenia", "Azerbaijan", "Georgia", "Macedonia",
+                         "Ukraine", "Moldova", "Belarus")
+
+ee_sf <- world_sf %>%
+        mutate(fill_color_bin = case_when(!(SOVEREIGNT %in% ee_presence_countries) ~ NA_character_,
+                                          SOVEREIGNT == "Ukraine" ~ "150_to_1500",
+                                          SOVEREIGNT == "Armenia" ~ "1_to_50",
+                                          fill_color_bin == "0_to_1" ~ "50_to_150",
+                                          TRUE ~ fill_color_bin),
+               fill_color = case_when(!(SOVEREIGNT %in% ee_presence_countries) ~ NA_character_,
+                                      SOVEREIGNT == "Ukraine" ~ "#21908CFF",
+                                      SOVEREIGNT == "Armenia" ~ "#440154FF",
+                                      fill_color == "#ffffff" ~ "#6BAED6",
+                                      TRUE ~ fill_color))
+
+ee_sf
+ee_sf %>% glimpse()
+st_crs(ee_sf)
+
+# convert crs to 3857
+ee_sf_3857 <- st_transform(ee_sf, 3857)
+st_crs(ee_sf_3857)
+
+# get region map using bbox from sf geometry from the original sf to get a sense of boundaries
+# (not sure if the original sf projection really matters, since i think ggmap_bbox function forces everything to 3857) 
+# note: this map deliberately cuts off ee map, proving that output will only show polygons/fill in range of ggmap
+# so excess like turkey/russia will not be plotted, which is good since it would need to be trimmed manually if it plotted
+unname(st_bbox(ee_sf))
+partial_ee_bbox <- unname(st_bbox(c(xmin = 13.51714, xmax = 50.36595, ymax = 48.55347, ymin = 40.93446), crs = st_crs(4326)))
+partial_ee_bbox
+
+ee_bbox <- unname(st_bbox(c(xmin = 11, xmax = 55, ymax = 57, ymin = 36), crs = st_crs(4326)))
+ee_bbox
+
+test_map_ee <- get_map(location = ee_bbox, source = "stamen", maptype = "terrain", zoom = 7, language = "en-EN")
+ggmap(test_map_ee)
+
+
+# Define a function to fix the bbox to be in EPSG:3857
+ggmap_bbox <- function(map) {
+        if (!inherits(map, "ggmap")) stop("map must be a ggmap object")
+        # Extract the bounding box (in lat/lon) from the ggmap to a numeric vector, 
+        # and set the names to what sf::st_bbox expects:
+        map_bbox <- setNames(unlist(attr(map, "bb")), 
+                             c("ymin", "xmin", "ymax", "xmax"))
+        
+        # Coonvert the bbox to an sf polygon, transform it to 3857, 
+        # and convert back to a bbox (convoluted, but it works)
+        bbox_3857 <- st_bbox(st_transform(st_as_sfc(st_bbox(map_bbox, crs = 4326)), 3857))
+        
+        # Overwrite the bbox of the ggmap object with the transformed coordinates 
+        attr(map, "bb")$ll.lat <- bbox_3857["ymin"]
+        attr(map, "bb")$ll.lon <- bbox_3857["xmin"]
+        attr(map, "bb")$ur.lat <- bbox_3857["ymax"]
+        attr(map, "bb")$ur.lon <- bbox_3857["xmax"]
+        map
+}
+
+# update ggmap bbox
+test_map_ee <- ggmap_bbox(test_map_ee)
+
+# create map
+# note viridis color palette works better than blues, since ocean blue is too similar
+output_map <- ggmap(test_map_ee) + 
+        coord_sf(crs = st_crs(3857)) + # force the ggplot2 map to be in 3857
+        geom_sf(data = ee_sf_3857, inherit.aes = FALSE, 
+                aes(fill = factor(fill_color_bin, 
+                                  levels = c("1_to_50", "50_to_150", "150_to_1500", "1500_to_5000", "5000_to_130000"))),
+                color = "#ffffff", size = .5) +
+        scale_fill_manual(values = world_fill_color_list[-1], name = " \n ",
+                          labels = c("1 to 50", "51 to 150", "151 to 1,500", "1,501 to 5,000", "5,001 to 130,000"),
+                          na.translate = FALSE) +
+        theme_bw() +
+        theme(panel.grid.major = element_line(color = "transparent"),
+              plot.background = element_blank(), 
+              panel.grid.minor = element_blank(), panel.border = element_blank(),
+              axis.ticks.y = element_blank(), axis.text.y = element_blank(), axis.title.y = element_blank(),
+              axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.title.x = element_blank(),
+              # plot.title = element_text(size = 6, face = "bold", hjust = 0, family = "Trebuchet MS"), 
+              plot.caption = element_text(hjust = 0, size = 11, face = "plain", family = "Calibri", 
+                                          color = "#000000", margin = margin(t = 0, r = 0, b = 0, l = 0)),
+              legend.position = "bottom",
+              legend.key.size = unit(2, "mm"),
+              legend.text = element_text(size = 12, family = "Calibri", margin(t = 0, r = 5, b = 0, l = 0, unit = "pt")), 
+              legend.title = element_text(size = 12, family = "Calibri", margin(t = 0, r = 0, b = 0, l = 0, unit = "pt")),
+              legend.justification = "center",
+              panel.grid = element_blank(),
+              line = element_blank(),
+              rect = element_blank(),
+              text = element_blank()) +
+        guides(fill = guide_legend(reverse = FALSE, 
+                                   # title = "Fake data\nvalues", 
+                                   title.hjust = .5,
+                                   keywidth = 2,
+                                   nrow = 2, byrow = TRUE))
+        # guides(fill = guide_legend(title.hjust = .5, title.vjust = 1.5, reverse = TRUE, keyheight = 1, label.vjust = 1.42))
+
+
+# inspect
+output_map
+
+
+#///////////////////
+
+
+# save map as emf
+filename <- tempfile(fileext = ".emf")
+emf(file = filename)
+print(output_map)
+dev.off()
+
+# add emf to word doc - will manually crop map in word doc 
+# i can crop with magick, but then there is image quality issues from png to ggplot roundtrip
+# note when saving from word to pdf, you'll need to print -> as pdf, 
+# instead of save_as -> pdf, since save_as has issues rendering emfs
+read_docx() %>% 
+        body_add_img(src = filename, width = 7, height = 7) %>% 
+        print(target = "ee_output_map.docx")
+
+
 #////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 #////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+# create e&e map with biscale ####
+
+# create biscale_ee_sf
+biscale_ee_sf <- world_sf %>%
+        mutate(n = case_when(!(SOVEREIGNT %in% ee_presence_countries) ~ NA_real_,
+                             SOVEREIGNT == "Azerbaijan" ~ 50,
+                             SOVEREIGNT == "Armenia" ~ 5550,
+                             SOVEREIGNT == "Albania" ~ 1000,
+                                          TRUE ~ n),
+               n2 = case_when(!(SOVEREIGNT %in% ee_presence_countries) ~ NA_real_,
+                              SOVEREIGNT == "Azerbaijan" ~ 50,
+                              SOVEREIGNT == "Armenia" ~ 5550,
+                              SOVEREIGNT == "Albania" ~ 1000,
+                                      TRUE ~ n2))
+biscale_ee_sf
+
+# add bi_class variable, which is just a string listing the x/y color palette pairing for each value
+biscale_ee_sf <- biscale_ee_sf %>% bi_class(.data = ., x = n, y = n2, style = "quantile", dim = 3) %>%
+        mutate(bi_class = case_when(bi_class == "NA-NA" ~ NA_character_, TRUE ~ bi_class))
+biscale_ee_sf
+biscale_ee_sf %>% glimpse()
+biscale_ee_sf %>% pull(bi_class) %>% tibble(bi_class = .) %>% distinct(bi_class)
+
+
+# convert crs to 3857
+biscale_ee_sf_3857 <- st_transform(biscale_ee_sf, 3857)
+st_crs(biscale_ee_sf_3857)
+
+# create map
+biscale_output_map <- ggmap(test_map_ee) + 
+        coord_sf(crs = st_crs(3857)) + # force the ggplot2 map to be in 3857
+        geom_sf(data = biscale_ee_sf_3857, inherit.aes = FALSE, mapping = aes(fill = bi_class), 
+                # aes(fill = factor(fill_color_bin, 
+                #                   levels = c("1_to_50", "50_to_150", "150_to_1500", "1500_to_5000", "5000_to_130000"))),
+                color = "#ffffff", size = .5) +
+        bi_scale_fill(pal = "DkBlue", dim = 3, na.translate = FALSE) +
+        theme_bw() +
+        theme(
+                # plot.margin = unit(c(0, 10, 0, 0), "mm"),
+              panel.grid.major = element_line(color = "transparent"),
+              plot.background = element_blank(), 
+              panel.grid.minor = element_blank(), panel.border = element_blank(),
+              axis.ticks.y = element_blank(), axis.text.y = element_blank(), axis.title.y = element_blank(),
+              axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.title.x = element_blank(),
+              # plot.title = element_text(size = 6, face = "bold", hjust = 0, family = "Trebuchet MS"), 
+              plot.caption = element_text(hjust = 0, size = 11, face = "plain", family = "Calibri", 
+                                          color = "#000000", margin = margin(t = 0, r = 0, b = 0, l = 0)),
+              legend.position = "none",
+              legend.key.size = unit(2, "mm"),
+              legend.text = element_text(size = 12, family = "Calibri", margin(t = 0, r = 5, b = 0, l = 0, unit = "pt")), 
+              legend.title = element_text(size = 12, family = "Calibri", margin(t = 0, r = 0, b = 0, l = 0, unit = "pt")),
+              legend.justification = "center",
+              panel.grid = element_blank(),
+              line = element_blank(),
+              rect = element_blank(),
+              text = element_blank()) +
+        guides(fill = guide_legend(reverse = FALSE, 
+                                   # title = "Fake data\nvalues", 
+                                   title.hjust = .5,
+                                   keywidth = 2,
+                                   nrow = 2, byrow = TRUE))
+# guides(fill = guide_legend(title.hjust = .5, title.vjust = 1.5, reverse = TRUE, keyheight = 1, label.vjust = 1.42))
+
+
+# inspect
+biscale_output_map
+
+# create legend
+legend <- bi_legend(pal = "DkBlue",
+                    dim = 3,
+                    xlab = "Higher n ",
+                    ylab = "Higher n2 ",
+                    size = 8)
+
+# add legend
+final_biscale_output_map <- ggdraw() +
+        draw_plot(biscale_output_map, x = 0, y = 0, width = .8, height = .8) +
+        draw_plot(legend, x = 0.8, y = .3, width = 0.2, height = 0.2)
+
+# inspect
+final_biscale_output_map
+
+
+#///////////////////
+
+
+# save map as emf
+filename <- tempfile(fileext = ".emf")
+emf(file = filename)
+print(final_biscale_output_map)
+dev.off()
+
+# add emf to word doc - will manually crop map in word doc 
+# i can crop with magick, but then there is image quality issues from png to ggplot roundtrip
+# note when saving from word to pdf, you'll need to print -> as pdf, 
+# instead of save_as -> pdf, since save_as has issues rendering emfs
+read_docx() %>% 
+        body_add_img(src = filename, width = 7, height = 7) %>% 
+        print(target = "ee_biscale_output_map.docx")
+
+
+#////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+#////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 
 
 # natural earth also has data on internal country administrative boundaries 
@@ -389,10 +659,8 @@ hungary_level_0 %>% glimpse()
 
 # plot
 hungary_level_0 %>% 
-        st_transform_proj(crs = "+proj=wintri +datum=WGS84 +no_defs +over") %>%
         ggplot() +
         geom_sf() +
-        coord_sf(datum = NULL) +
         theme_bw() +
         theme(panel.grid.major = element_line(color = "transparent"),
               plot.background = element_blank(), 
@@ -433,10 +701,8 @@ tibble(type = hungary_level_1 %>% pull(TYPE_1),
 
 # plot
 hungary_level_1 %>% 
-        st_transform_proj(crs = "+proj=wintri +datum=WGS84 +no_defs +over") %>%
         ggplot() +
         geom_sf() +
-        coord_sf(datum = NULL) +
         theme_bw() +
         theme(panel.grid.major = element_line(color = "transparent"),
               plot.background = element_blank(), 
@@ -477,10 +743,8 @@ tibble(type = hungary_level_2 %>% pull(TYPE_2),
 
 # plot
 hungary_level_2 %>% 
-        st_transform_proj(crs = "+proj=wintri +datum=WGS84 +no_defs +over") %>%
         ggplot() +
         geom_sf() +
-        coord_sf(datum = NULL) +
         theme_bw() +
         theme(panel.grid.major = element_line(color = "transparent"),
               plot.background = element_blank(), 
