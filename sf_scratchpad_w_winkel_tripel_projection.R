@@ -15,6 +15,8 @@ library(devEMF)
 library(ggspatial) # ggspatial has the best map scale and north arrow
 library(ggmap)
 library(viridis)
+library(pals)
+# library(colorblindcheck)
 
 # https://wilkelab.org/practicalgg/articles/Winkel_tripel.html
 # note that getMap uses natural earth for country boundaries, but fixes several issues, so better to pull from rworldmap
@@ -33,6 +35,8 @@ library(viridis)
 
 # ggmap: https://www.littlemissdata.com/blog/maps
 # https://cengel.github.io/R-spatial/mapping.html#adding-basemaps-with-ggmap
+
+# color palettes: https://nowosad.github.io/post/cbc-bp2/
 
 # setwd
 setwd("C:/Users/Stephen/Desktop/R/sf")
@@ -534,26 +538,97 @@ read_docx() %>%
 
 # create e&e map with biscale ####
 
+# note can try to tailor alpha fill setting for ee_presence countries, but it's tough and may not look good with terrain map??
+# https://stackoverflow.com/questions/24800626/r-ggplot-transparency-alpha-values-conditional-on-other-variable
+# https://ggplot2.tidyverse.org/reference/scale_alpha.html
+
 # create biscale_ee_sf
 biscale_ee_sf <- world_sf %>%
-        mutate(n = case_when(!(SOVEREIGNT %in% ee_presence_countries) ~ NA_real_,
+        mutate(n = case_when(
+                !(SOVEREIGNT %in% ee_presence_countries) ~ NA_real_,
                              SOVEREIGNT == "Azerbaijan" ~ 50,
                              SOVEREIGNT == "Armenia" ~ 5550,
                              SOVEREIGNT == "Albania" ~ 1000,
                                           TRUE ~ n),
-               n2 = case_when(!(SOVEREIGNT %in% ee_presence_countries) ~ NA_real_,
+               n2 = case_when(
+                       !(SOVEREIGNT %in% ee_presence_countries) ~ NA_real_,
                               SOVEREIGNT == "Azerbaijan" ~ 50,
                               SOVEREIGNT == "Armenia" ~ 5550,
                               SOVEREIGNT == "Albania" ~ 1000,
-                                      TRUE ~ n2))
+                                      TRUE ~ n2)
+               # alpha_fill = case_when(SOVEREIGNT %in% ee_presence_countries ~ 1, TRUE ~ .5)
+               )
+
+# inspect
 biscale_ee_sf
 
+
+#//////////////////////////
+
+
 # add bi_class variable, which is just a string listing the x/y color palette pairing for each value
-biscale_ee_sf <- biscale_ee_sf %>% bi_class(.data = ., x = n, y = n2, style = "quantile", dim = 3) %>%
+# note that the first number of bi_class is the class of the x variable, the second number is the class of the y variable
+biscale_ee_sf <- biscale_ee_sf %>% bi_class(.data = ., x = n, y = n2, style = "jenks", dim = 3) %>%
         mutate(bi_class = case_when(bi_class == "NA-NA" ~ NA_character_, TRUE ~ bi_class))
+
+# inspect
 biscale_ee_sf
 biscale_ee_sf %>% glimpse()
 biscale_ee_sf %>% pull(bi_class) %>% tibble(bi_class = .) %>% distinct(bi_class)
+inspect_biscale_ee_sf <- biscale_ee_sf
+st_geometry(inspect_biscale_ee_sf) <- NULL
+inspect_biscale_ee_sf %>% as_tibble() %>% count(n, n2, bi_class) %>% arrange(desc(n))
+inspect_biscale_ee_sf %>% as_tibble() %>% count(bi_class)
+?classIntervals
+# https://en.wikipedia.org/wiki/Jenks_natural_breaks_optimization
+# https://www.ehdp.com/methods/jenks-natural-breaks-explain.htm (note this seems to omit mention of last step from wikipedia)
+classIntervals(var = inspect_biscale_ee_sf %>% as_tibble() %>% pull(n), n = 3, style = "jenks")
+classIntervals(var = inspect_biscale_ee_sf %>% as_tibble() %>% pull(n2), n = 3, style = "jenks")
+
+
+#/////////////////////////////////////
+
+
+# create custom_palette, which must have class bi_pal_custom, and bi_class names in order to work with bi_scale_fill
+# format of bi_class mapping to legend is: 
+# first number = legend col counting up from left to right
+# second number = legend row counting up from bottom to top
+# see color blender: https://meyerweb.com/eric/tools/color-blend/#31688E:35B779:5:hex
+
+# inspect palette
+# note that stevens.greenblue is colorblind safe: https://nowosad.github.io/post/cbc-bp2/
+stevens.greenblue()
+bivcol <- function(pal){
+        tit = substitute(pal)
+        pal = pal()
+        ncol = length(pal)
+        image(matrix(seq_along(pal), nrow = sqrt(ncol)),
+              axes = FALSE, 
+              col = pal, 
+              asp = 1)
+        mtext(tit)
+}
+bivcol(pal = stevens.greenblue)
+biscale_palette <- data.frame(matrix(seq_along(stevens.greenblue()), nrow = sqrt(9))) %>% as_tibble() 
+biscale_palette
+
+# create custom_palette
+custom_palette <- c("1-1" = stevens.greenblue()[biscale_palette[1, 1] %>% pull()], 
+                    "1-2" = stevens.greenblue()[biscale_palette[1, 2] %>% pull()],
+                    "1-3" = stevens.greenblue()[biscale_palette[1, 3] %>% pull()],
+                    "2-1" = stevens.greenblue()[biscale_palette[2, 1] %>% pull()],
+                    "2-2" = stevens.greenblue()[biscale_palette[2, 2] %>% pull()],
+                    "2-3" = stevens.greenblue()[biscale_palette[2, 3] %>% pull()],
+                    "3-1" = stevens.greenblue()[biscale_palette[3, 1] %>% pull()],
+                    "3-2" = stevens.greenblue()[biscale_palette[3, 2] %>% pull()],
+                    "3-3" = stevens.greenblue()[biscale_palette[3, 3] %>% pull()])
+custom_palette
+class(custom_palette)
+class(custom_palette) <- "bi_pal_custom"
+class(custom_palette)
+
+
+#/////////////////////////////////////
 
 
 # convert crs to 3857
@@ -564,10 +639,9 @@ st_crs(biscale_ee_sf_3857)
 biscale_output_map <- ggmap(test_map_ee) + 
         coord_sf(crs = st_crs(3857)) + # force the ggplot2 map to be in 3857
         geom_sf(data = biscale_ee_sf_3857, inherit.aes = FALSE, mapping = aes(fill = bi_class), 
-                # aes(fill = factor(fill_color_bin, 
-                #                   levels = c("1_to_50", "50_to_150", "150_to_1500", "1500_to_5000", "5000_to_130000"))),
                 color = "#ffffff", size = .5) +
         bi_scale_fill(pal = "DkBlue", dim = 3, na.translate = FALSE) +
+        # scale_alpha_discrete(range = c(.5, 1.5)) +
         theme_bw() +
         theme(
                 # plot.margin = unit(c(0, 10, 0, 0), "mm"),
@@ -593,18 +667,12 @@ biscale_output_map <- ggmap(test_map_ee) +
                                    title.hjust = .5,
                                    keywidth = 2,
                                    nrow = 2, byrow = TRUE))
-# guides(fill = guide_legend(title.hjust = .5, title.vjust = 1.5, reverse = TRUE, keyheight = 1, label.vjust = 1.42))
-
 
 # inspect
 biscale_output_map
 
 # create legend
-legend <- bi_legend(pal = "DkBlue",
-                    dim = 3,
-                    xlab = "Higher n ",
-                    ylab = "Higher n2 ",
-                    size = 8)
+legend <- bi_legend(pal = "DkBlue", dim = 3, xlab = "Higher n ", ylab = "Higher n2 ", size = 8)
 
 # add legend
 final_biscale_output_map <- ggdraw() +
@@ -631,6 +699,57 @@ dev.off()
 read_docx() %>% 
         body_add_img(src = filename, width = 7, height = 7) %>% 
         print(target = "ee_biscale_output_map.docx")
+
+
+#/////////////////////////////////////////////////////////////////////////////////////////////////////
+#/////////////////////////////////////////////////////////////////////////////////////////////////////
+#/////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+# still experimental
+# convert map to png to get smaller file size, and can crop as necessary, then annotate further in ggplot
+
+# https://cran.r-project.org/web/packages/cowplot/vignettes/introduction.html
+# https://cran.r-project.org/web/packages/magick/vignettes/intro.html
+
+# logo_file <- system.file("extdata", "logo.png", package = "cowplot")
+# logo_file
+# ggdraw() + draw_image(logo_file, scale = 0.5)
+# 
+# ggdraw(p) + 
+#         draw_image(image_file, x = 1, y = 1, hjust = 1, vjust = 1, width = 0.5, height = 0.5)
+# 
+# ggdraw() + 
+#         draw_image(image_file, x = 1, y = 1, hjust = 1, vjust = 1, width = 0.5, height = 0.5)
+
+image <- biscale_output_map
+image
+ggsave(file="output/map/biscale_output_map.svg", plot = image, width = 36, height = 24, limitsize = FALSE)
+
+map <- image_read_svg("output/map/biscale_output_map.svg")
+map
+map %>% image_info()
+
+# crop map if needed
+# map <- image_crop(image = map, geometry = geometry_area(width = 2300, height = 1600, x_off = 50, y_off = 50))
+# map
+
+image_write(image = map, path = "output/map/map.png", format = "png")
+
+image_file <- "C:/Users/Stephen/Desktop/usaid/mcp/tso_portfolio_reviews/democracy_and_governance/output/map/map.png"
+ggdraw() %>% draw_image(image = image_file, width = .5, height = .5)
+
+# https://ggplot2.tidyverse.org/reference/annotation_custom.html
+base <- ggplot() +
+        geom_blank() +
+        theme_bw() +
+        theme(panel.grid.major = element_line(color = "transparent"),
+              plot.background = element_blank(), 
+              panel.grid.minor = element_blank(), panel.border = element_blank(),
+        )
+base
+
+ggdraw(base) + draw_image(image = image_file, x = 1, y = 1, hjust = 1, vjust = 1, width = .75, height = .75)
 
 
 #////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
