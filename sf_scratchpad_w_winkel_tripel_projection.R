@@ -39,7 +39,8 @@ library(pals)
 # color palettes: https://nowosad.github.io/post/cbc-bp2/
 
 # setwd
-setwd("C:/Users/Stephen/Desktop/R/sf")
+# setwd("C:/Users/Stephen/Desktop/R/sf")
+setwd("C:/Users/sdevine/Desktop/R/sf")
 
 # get world map as sf object ####
 world_sf <- st_as_sf(getMap(resolution = "low"))
@@ -75,8 +76,8 @@ world_sf %>% distinct(SOVEREIGNT) %>% pull(SOVEREIGNT) %>%
 # join world_sf with data of interest ####
 
 # create fake_data
-fake_data <- world_sf %>% distinct(SOVEREIGNT) %>% pull(SOVEREIGNT) %>% 
-        tibble(SOVEREIGNT = .) %>% mutate(SOVEREIGNT = as.character(SOVEREIGNT)) %>% distinct(SOVEREIGNT) 
+fake_data <- world_sf %>% pull(SOVEREIGNT) %>%  tibble(SOVEREIGNT = .) %>% 
+        mutate(SOVEREIGNT = as.character(SOVEREIGNT)) %>% distinct(SOVEREIGNT) 
 fake_data <- fake_data %>% mutate(n = sample(x = seq(from = 0, to = 10000, by = 1), size = nrow(fake_data))) %>%
         mutate(n = case_when(row_number() %in% 1:20 ~ NA_real_, row_number() %in% 21:40 ~ 5, TRUE ~ n),
                SOVEREIGNT = factor(SOVEREIGNT))
@@ -93,8 +94,8 @@ world_sf %>% glimpse()
 
 
 # create fake_data_2
-fake_data_2 <- world_sf %>% distinct(SOVEREIGNT) %>% pull(SOVEREIGNT) %>% 
-        tibble(SOVEREIGNT = .) %>% mutate(SOVEREIGNT = as.character(SOVEREIGNT)) %>% distinct(SOVEREIGNT) 
+fake_data_2 <- world_sf %>% pull(SOVEREIGNT) %>%  tibble(SOVEREIGNT = .) %>%  
+        mutate(SOVEREIGNT = as.character(SOVEREIGNT)) %>% distinct(SOVEREIGNT) 
 fake_data_2 <- fake_data_2 %>% mutate(n2 = sample(x = seq(from = 0, to = 10000, by = 1), size = nrow(fake_data))) %>%
         mutate(n2 = case_when(row_number() %in% 1:20 ~ NA_real_, row_number() %in% 21:40 ~ 5, TRUE ~ n2),
                SOVEREIGNT = factor(SOVEREIGNT))
@@ -144,8 +145,10 @@ world_sf %>% distinct(SOVEREIGNT, n) %>% filter(is.na(n))
 
 
 # create fill_color_list for to pass to scale_color_manual
-world_fill_color_list <- world_sf %>% count(fill_color_bin, fill_color) %>% pull(fill_color)
-names(world_fill_color_list) <- world_sf %>% count(fill_color_bin, fill_color) %>% pull(fill_color_bin)
+world_fill_color_list <- world_sf %>% select(fill_color_bin, fill_color) %>% 
+        as_tibble() %>% select(-geometry) %>% count(fill_color_bin, fill_color) %>% pull(fill_color)
+names(world_fill_color_list) <- world_sf %>% select(fill_color_bin, fill_color) %>% 
+        as_tibble() %>% select(-geometry) %>% distinct(fill_color_bin) %>% pull(fill_color_bin)
 world_fill_color_list
 
 
@@ -153,15 +156,53 @@ world_fill_color_list
 
 
 # import extra fonts from extrafont package
-windowsFonts()
-# font_import()
+
+# https://stackoverflow.com/questions/61204259/how-can-i-resolve-the-no-font-name-issue-when-importing-fonts-into-r-using-ext/68642855#68642855
+# https://github.com/wch/extrafont/issues/32
+# https://cran.r-project.org/web/packages/extrafont/README.html
+library(remotes)
+remotes::install_version("Rttf2pt1", version = "1.3.8")
+library(extrafont)
+# extrafont::font_import()
 # loadfonts(device = "win")
 windowsFonts()
 fonttable()
 fonts()
 
 
+#//////////////////////////////////////////////////////////////////////////////////////
+
+
+# plot country ####
+country_outline <- world_sf %>% 
+        mutate(fill_color_bin = "selected_color") %>%
+        filter(SOVEREIGNT != "Antarctica") %>%
+        filter(SOVEREIGNT == "Ukraine") %>%
+        ggplot(data = ., mapping = aes(fill = factor(fill_color_bin))) + 
+        geom_sf(color = "#E0ECF7", size = 0.05) +
+        scale_fill_manual(values = list("selected_color" = "#E0ECF7"), guide = "none") +
+        theme_bw() +
+        theme(panel.grid.major = element_line(color = "transparent"),
+              plot.background = element_blank(), 
+              panel.grid.minor = element_blank(), panel.border = element_blank(),
+              axis.ticks.y = element_blank(), axis.text.y = element_blank(), axis.title.y = element_blank(),
+              axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.title.x = element_blank(),
+              # plot.title = element_text(size = 6, face = "bold", hjust = 0, family = "Trebuchet MS"), 
+              plot.caption = element_text(hjust = 0, size = 11, face = "plain", family = "Calibri", 
+                                          color = "#000000", margin = margin(t = 0, r = 0, b = 0, l = 0)),
+              legend.position = "right",
+              legend.key.size = unit(2, "mm"),
+              legend.text = element_text(size = 12, family = "Calibri", margin(t = 0, r = 0, b = 0, l = 0, unit = "pt")), 
+              legend.title = element_text(size = 12, family = "Calibri", margin(t = 0, r = 0, b = 0, l = 0, unit = "pt")),
+              panel.grid = element_blank(),
+              line = element_blank(),
+              rect = element_blank(),
+              text = element_blank())
+country_outline
+
+
 #/////////////////////////////////////////////////////////////////////////////////////
+
 
 # plot basic, w bounding box ####
 # note that basic plots like this can be overlaid with bounding box to show global location as inset for zoomed in local map
@@ -171,6 +212,7 @@ fonts()
 # https://ggplot2.tidyverse.org/reference/annotate.html
 # note that annotate is tied to the plot scale though, whereas ggdraw can literally draw anywhere on a plot using 0 to 1 x/y pct
 world_sf %>% 
+        filter(SOVEREIGNT != "Antarctica") %>%
         ggplot(aes(fill = factor(fill_color_bin, 
                                  levels = c("0_to_1", "1_to_50", "50_to_150", "150_to_1500", "1500_to_5000", "5000_to_130000")))) + 
         geom_sf(color = "#a6a6a6", size = 0.05) +
@@ -411,8 +453,8 @@ read_docx() %>%
 # note the sf is using wgs84 coordinate reference system
 world_sf %>% filter(str_detect(string = SOVEREIGNT, pattern = regex("russia", ignore_case = TRUE))) %>% select(SOVEREIGNT)
 ee_presence_countries <- c("Kosovo", "Bosnia and Herzegovina", "Republic of Serbia", 
-                         "Albania", "Armenia", "Azerbaijan", "Georgia", "Macedonia",
-                         "Ukraine", "Moldova", "Belarus")
+                           "Albania", "Armenia", "Azerbaijan", "Georgia", "Macedonia",
+                           "Ukraine", "Moldova", "Belarus")
 
 ee_sf <- world_sf %>%
         mutate(fill_color_bin = case_when(!(SOVEREIGNT %in% ee_presence_countries) ~ NA_character_,
@@ -506,7 +548,7 @@ output_map <- ggmap(test_map_ee) +
                                    title.hjust = .5,
                                    keywidth = 2,
                                    nrow = 2, byrow = TRUE))
-        # guides(fill = guide_legend(title.hjust = .5, title.vjust = 1.5, reverse = TRUE, keyheight = 1, label.vjust = 1.42))
+# guides(fill = guide_legend(title.hjust = .5, title.vjust = 1.5, reverse = TRUE, keyheight = 1, label.vjust = 1.42))
 
 
 # inspect
@@ -546,18 +588,18 @@ read_docx() %>%
 biscale_ee_sf <- world_sf %>%
         mutate(n = case_when(
                 !(SOVEREIGNT %in% ee_presence_countries) ~ NA_real_,
-                             SOVEREIGNT == "Azerbaijan" ~ 50,
-                             SOVEREIGNT == "Armenia" ~ 5550,
-                             SOVEREIGNT == "Albania" ~ 1000,
-                                          TRUE ~ n),
+                SOVEREIGNT == "Azerbaijan" ~ 50,
+                SOVEREIGNT == "Armenia" ~ 5550,
+                SOVEREIGNT == "Albania" ~ 1000,
+                TRUE ~ n),
                n2 = case_when(
                        !(SOVEREIGNT %in% ee_presence_countries) ~ NA_real_,
-                              SOVEREIGNT == "Azerbaijan" ~ 50,
-                              SOVEREIGNT == "Armenia" ~ 5550,
-                              SOVEREIGNT == "Albania" ~ 1000,
-                                      TRUE ~ n2)
+                       SOVEREIGNT == "Azerbaijan" ~ 50,
+                       SOVEREIGNT == "Armenia" ~ 5550,
+                       SOVEREIGNT == "Albania" ~ 1000,
+                       TRUE ~ n2)
                # alpha_fill = case_when(SOVEREIGNT %in% ee_presence_countries ~ 1, TRUE ~ .5)
-               )
+        )
 
 # inspect
 biscale_ee_sf
@@ -645,23 +687,23 @@ biscale_output_map <- ggmap(test_map_ee) +
         theme_bw() +
         theme(
                 # plot.margin = unit(c(0, 10, 0, 0), "mm"),
-              panel.grid.major = element_line(color = "transparent"),
-              plot.background = element_blank(), 
-              panel.grid.minor = element_blank(), panel.border = element_blank(),
-              axis.ticks.y = element_blank(), axis.text.y = element_blank(), axis.title.y = element_blank(),
-              axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.title.x = element_blank(),
-              # plot.title = element_text(size = 6, face = "bold", hjust = 0, family = "Trebuchet MS"), 
-              plot.caption = element_text(hjust = 0, size = 11, face = "plain", family = "Calibri", 
-                                          color = "#000000", margin = margin(t = 0, r = 0, b = 0, l = 0)),
-              legend.position = "none",
-              legend.key.size = unit(2, "mm"),
-              legend.text = element_text(size = 12, family = "Calibri", margin(t = 0, r = 5, b = 0, l = 0, unit = "pt")), 
-              legend.title = element_text(size = 12, family = "Calibri", margin(t = 0, r = 0, b = 0, l = 0, unit = "pt")),
-              legend.justification = "center",
-              panel.grid = element_blank(),
-              line = element_blank(),
-              rect = element_blank(),
-              text = element_blank()) +
+                panel.grid.major = element_line(color = "transparent"),
+                plot.background = element_blank(), 
+                panel.grid.minor = element_blank(), panel.border = element_blank(),
+                axis.ticks.y = element_blank(), axis.text.y = element_blank(), axis.title.y = element_blank(),
+                axis.ticks.x = element_blank(), axis.text.x = element_blank(), axis.title.x = element_blank(),
+                # plot.title = element_text(size = 6, face = "bold", hjust = 0, family = "Trebuchet MS"), 
+                plot.caption = element_text(hjust = 0, size = 11, face = "plain", family = "Calibri", 
+                                            color = "#000000", margin = margin(t = 0, r = 0, b = 0, l = 0)),
+                legend.position = "none",
+                legend.key.size = unit(2, "mm"),
+                legend.text = element_text(size = 12, family = "Calibri", margin(t = 0, r = 5, b = 0, l = 0, unit = "pt")), 
+                legend.title = element_text(size = 12, family = "Calibri", margin(t = 0, r = 0, b = 0, l = 0, unit = "pt")),
+                legend.justification = "center",
+                panel.grid = element_blank(),
+                line = element_blank(),
+                rect = element_blank(),
+                text = element_blank()) +
         guides(fill = guide_legend(reverse = FALSE, 
                                    # title = "Fake data\nvalues", 
                                    title.hjust = .5,
@@ -882,5 +924,3 @@ hungary_level_2 %>%
               rect = element_blank(),
               text = element_blank()) + 
         guides(fill = guide_legend(title.hjust = .5, title.vjust = 1.5, reverse = TRUE, keyheight = 1, label.vjust = 1.42))
-
-
